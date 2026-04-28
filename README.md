@@ -6,12 +6,12 @@
 
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
 ![YOLOv8](https://img.shields.io/badge/YOLOv8n-Ultralytics-00BFFF?logo=github)
-![mAP](https://img.shields.io/badge/mAP%400.5-0.837-brightgreen)
+![mAP](https://img.shields.io/badge/mAP%400.5-0.857-brightgreen)
 ![Latency](https://img.shields.io/badge/Latency-22ms-orange)
 ![GPU](https://img.shields.io/badge/GPU-GTX%201650-76b900?logo=nvidia&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-*Two-phase curriculum training for construction-site PPE compliance monitoring*
+*Two-phase curriculum training: Phase 1 on Roboflow data → Phase 2 fine-tuned on client-specific imagery using Phase 1 best.pt checkpoint*
 
 </div>
 
@@ -40,11 +40,18 @@
 
 ## Overview
 
-This repository implements a **real-time PPE detection system** for construction and industrial environments. The system detects 7 PPE-compliance classes across live video streams using **YOLOv8n** — chosen for its exceptional inference speed (22 ms on GTX 1650) while maintaining a strong mAP@0.5 of **0.837**.
+This repository implements a **real-time PPE detection system** for construction and industrial environments. The system detects 7 PPE-compliance classes across live video streams using **YOLOv8n** — chosen for its exceptional inference speed (22 ms on GTX 1650) while maintaining a strong mAP@0.5 of **0.857** after two-phase training.
 
-Training follows a **two-phase curriculum**: Phase 1 bootstraps on a broad Roboflow PPE dataset; Phase 2 fine-tunes on client-specific imagery for domain adaptation.
+Training follows a **two-phase curriculum**: Phase 1 bootstraps on a broad Roboflow PPE dataset to learn task-specific feature representations; Phase 2 loads the Phase 1 `best.pt` checkpoint and fine-tunes on client-specific imagery for domain adaptation, improving every metric.
 
 ### Key Numbers
+
+| Metric | Phase 1 (Roboflow) | Phase 2 (Client) | Δ |
+|---|---|---|---|
+| mAP@0.5 | ~0.838 | **~0.857** | +0.019 |
+| mAP@0.5-0.95 | ~0.527 | **~0.549** | +0.022 |
+| Precision | ~0.91 | **~0.93** | +0.02 |
+| Recall | ~0.76 | **~0.79** | +0.03 |
 
 | Metric | Value |
 |---|---|
@@ -52,8 +59,8 @@ Training follows a **two-phase curriculum**: Phase 1 bootstraps on a broad Robof
 | Parameters | 3.2 M |
 | Inference latency | **22 ms** (GTX 1650) |
 | Training epochs | 50 × 2 phases |
-| mAP@0.5 | **0.837** |
-| mAP@0.5-0.95 | ~0.530 |
+| mAP@0.5 (Phase 2 final) | **0.857** |
+| mAP@0.5-0.95 (Phase 2 final) | ~0.549 |
 | Best F1 | **0.83** @ conf 0.380 |
 | Max precision | 1.00 @ conf 0.938 |
 | Classes | 7 |
@@ -62,139 +69,9 @@ Training follows a **two-phase curriculum**: Phase 1 bootstraps on a broad Robof
 
 ## Training Pipeline
 
-The diagram below shows the full end-to-end pipeline from raw data to deployment:
+The diagram below illustrates the full end-to-end pipeline from raw data to deployment, including the **checkpoint transfer** from Phase 1 to Phase 2 (highlighted in amber). Phase 2 initialises directly from Phase 1's `best.pt`, so all domain-specific generalisation is additive on top of the Roboflow-trained weights.
 
-
-<svg width="100%" viewBox="0 0 680 900" role="img" style="" xmlns="http://www.w3.org/2000/svg">
-  <title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">YOLOv8n PPE &amp; Vehicle Detection Training Pipeline</title>
-  <desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">End-to-end training pipeline: Roboflow dataset → preprocessing → model selection → fine-tuning on client data → evaluation → deployment</desc>
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </marker>
-  <mask id="imagine-text-gaps-o5lrm8" maskUnits="userSpaceOnUse"><rect x="0" y="0" width="680" height="900" fill="white"/><rect x="298.3937683105469" y="43.79999923706055" width="83.771484375" height="22.399999618530273" fill="black" rx="2"/><rect x="166.1374969482422" y="64.4000015258789" width="348.751708984375" height="19.199999809265137" fill="black" rx="2"/><rect x="291.5500183105469" y="133.8000030517578" width="96.9000015258789" height="22.399999618530273" fill="black" rx="2"/><rect x="201.65000915527344" y="154.40000915527344" width="277.27569580078125" height="19.199999809265137" fill="black" rx="2"/><rect x="285.4562683105469" y="222.8000030517578" width="109.0875015258789" height="22.399999618530273" fill="black" rx="2"/><rect x="142.99375915527344" y="242.40000915527344" width="395.0416564941406" height="19.199999809265137" fill="black" rx="2"/><rect x="123.5" y="272" width="43.06328201293945" height="20" fill="black" rx="2"/><rect x="256.2749938964844" y="272" width="47.86562728881836" height="20" fill="black" rx="2"/><rect x="370.625" y="272" width="58.767189025878906" height="20" fill="black" rx="2"/><rect x="499.3125" y="272" width="61.375" height="20" fill="black" rx="2"/><rect x="107.07500457763672" y="295.3999938964844" width="75.44393157958984" height="19.199999809265137" fill="black" rx="2"/><rect x="261.32501220703125" y="295.3999938964844" width="36.55000114440918" height="19.199999809265137" fill="black" rx="2"/><rect x="375.6125183105469" y="295.3999938964844" width="49.807960510253906" height="19.199999809265137" fill="black" rx="2"/><rect x="511.1812744140625" y="295.3999938964844" width="38.44394493103027" height="19.199999809265137" fill="black" rx="2"/><rect x="113.8499984741211" y="321.3999938964844" width="62.53594970703125" height="19.199999809265137" fill="black" rx="2"/><rect x="260.2124938964844" y="321.3999938964844" width="38.77499961853027" height="19.199999809265137" fill="black" rx="2"/><rect x="373.5062561035156" y="321.3999938964844" width="54.01992416381836" height="19.199999809265137" fill="black" rx="2"/><rect x="510.625" y="321.3999938964844" width="39.26596641540527" height="19.199999809265137" fill="black" rx="2"/><rect x="113.80000305175781" y="347.3999938964844" width="62.6319580078125" height="19.199999809265137" fill="black" rx="2"/><rect x="261.46875" y="347.3999938964844" width="36.26250076293945" height="19.199999809265137" fill="black" rx="2"/><rect x="374.7124938964844" y="347.3999938964844" width="51.60195541381836" height="19.199999809265137" fill="black" rx="2"/><rect x="510.54998779296875" y="347.3999938964844" width="38.89999961853027" height="19.199999809265137" fill="black" rx="2"/><rect x="112.7562484741211" y="361.3999938964844" width="64.71393966674805" height="19.199999809265137" fill="black" rx="2"/><rect x="261.0625" y="361.3999938964844" width="37.07500076293945" height="19.199999809265137" fill="black" rx="2"/><rect x="375.54376220703125" y="361.3999938964844" width="49.94599533081055" height="19.199999809265137" fill="black" rx="2"/><rect x="510.54998779296875" y="361.3999938964844" width="38.89999961853027" height="19.199999809265137" fill="black" rx="2"/><rect x="215.05625915527344" y="421.8000183105469" width="250.4384765625" height="22.399999618530273" fill="black" rx="2"/><rect x="201.60000610351562" y="442.3999938964844" width="276.4417419433594" height="19.199999809265137" fill="black" rx="2"/><rect x="263.28125" y="511.79998779296875" width="153.4375" height="22.399999618530273" fill="black" rx="2"/><rect x="87.3187484741211" y="532.4000244140625" width="505.1335144042969" height="19.199999809265137" fill="black" rx="2"/><rect x="236.3249969482422" y="601.7999877929688" width="207.912109375" height="22.399999618530273" fill="black" rx="2"/><rect x="167.8625030517578" y="622.4000244140625" width="343.9176940917969" height="19.199999809265137" fill="black" rx="2"/><rect x="303.09375" y="691.7999877929688" width="73.8125" height="22.399999618530273" fill="black" rx="2"/><rect x="161.5812530517578" y="712.4000244140625" width="357.1876525878906" height="19.199999809265137" fill="black" rx="2"/><rect x="284.5687561035156" y="781.7999877929688" width="111.7373046875" height="22.399999618530273" fill="black" rx="2"/><rect x="220.96250915527344" y="802.4000244140625" width="238.0749969482422" height="19.199999809265137" fill="black" rx="2"/><rect x="54" y="853.4000244140625" width="35.26397705078125" height="19.199999809265137" fill="black" rx="2"/><rect x="123.20000457763672" y="853.4000244140625" width="53.469970703125" height="19.199999809265137" fill="black" rx="2"/><rect x="211.1999969482422" y="853.4000244140625" width="93.54595184326172" height="19.199999809265137" fill="black" rx="2"/><rect x="334" y="853.4000244140625" width="70.63393783569336" height="19.199999809265137" fill="black" rx="2"/><rect x="426" y="853.4000244140625" width="77.80596160888672" height="19.199999809265137" fill="black" rx="2"/></mask></defs>
-
-  <!-- ── STAGE 1: Data Source ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="30" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(8, 80, 65);stroke:rgb(93, 202, 165);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="55" text-anchor="middle" dominant-baseline="central" style="fill:rgb(159, 225, 203);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Data source</text>
-    <text x="340" y="74" text-anchor="middle" dominant-baseline="central" style="fill:rgb(93, 202, 165);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">Roboflow public dataset · 25-class PPE &amp; vehicle annotations</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="94" x2="340" y2="118" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 2: Preprocessing ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="120" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(8, 80, 65);stroke:rgb(93, 202, 165);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="145" text-anchor="middle" dominant-baseline="central" style="fill:rgb(159, 225, 203);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Preprocessing</text>
-    <text x="340" y="164" text-anchor="middle" dominant-baseline="central" style="fill:rgb(93, 202, 165);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">Resize · augment · normalise · YOLO label format</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="184" x2="340" y2="208" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 3: Model Selection (box with inner table) ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="210" width="600" height="170" rx="10" stroke-width="0.5" style="fill:rgb(60, 52, 137);stroke:rgb(175, 169, 236);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="234" text-anchor="middle" dominant-baseline="central" style="fill:rgb(206, 203, 246);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Model selection</text>
-    <text x="340" y="252" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">Benchmark on NVIDIA GeForce GTX 1650 · COCO pretrained weights</text>
-  </g>
-
-  <!-- Table header -->
-  <rect x="60" y="265" width="560" height="26" rx="4" fill="none" stroke="none" style="fill:none;stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="145" y="282" text-anchor="middle" dominant-baseline="central" style="font-weight:500;fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:500;text-anchor:middle;dominant-baseline:central">Model</text>
-  <text x="280" y="282" text-anchor="middle" dominant-baseline="central" style="font-weight:500;fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:500;text-anchor:middle;dominant-baseline:central">Params</text>
-  <text x="400" y="282" text-anchor="middle" dominant-baseline="central" style="font-weight:500;fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:500;text-anchor:middle;dominant-baseline:central">Inference</text>
-  <text x="530" y="282" text-anchor="middle" dominant-baseline="central" style="font-weight:500;fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:500;text-anchor:middle;dominant-baseline:central">mAP@0.5</text>
-  <line x1="60" y1="291" x2="620" y2="291" stroke="var(--color-border-tertiary)" stroke-width="0.5" mask="url(#imagine-text-gaps-o5lrm8)" style="fill:rgb(0, 0, 0);stroke:rgba(222, 220, 209, 0.15);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- Row 1 — selected -->
-  <rect x="60" y="292" width="560" height="26" rx="3" opacity="0.35" style="fill:rgb(99, 56, 6);stroke:rgb(239, 159, 39);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.35;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="145" y="305" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">YOLOv8n ★</text>
-  <text x="280" y="305" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">3.2M</text>
-  <text x="400" y="305" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">~22 ms</text>
-  <text x="530" y="305" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">0.837</text>
-  <!-- Row 2 -->
-  <text x="145" y="331" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">YOLOv8s</text>
-  <text x="280" y="331" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">11.2M</text>
-  <text x="400" y="331" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">~128 ms</text>
-  <text x="530" y="331" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">0.943</text>
-  <!-- Row 3 -->
-  <text x="145" y="357" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">YOLOv9s</text>
-  <text x="280" y="357" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">7.2M</text>
-  <text x="400" y="357" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">~116 ms</text>
-  <text x="530" y="357" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">0.950</text>
-  <!-- Row 4 -->
-  <text x="145" y="371" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">YOLOv11s</text>
-  <text x="280" y="371" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">9.4M</text>
-  <text x="400" y="371" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">~90 ms</text>
-  <text x="530" y="371" text-anchor="middle" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">0.950</text>
-
-  <line x1="60" y1="383" x2="620" y2="383" stroke="var(--color-border-tertiary)" stroke-width="0.5" style="fill:rgb(0, 0, 0);stroke:rgba(222, 220, 209, 0.15);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- arrow -->
-  <line x1="340" y1="381" x2="340" y2="406" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 4: Phase 1 Training ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="408" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(12, 68, 124);stroke:rgb(133, 183, 235);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="433" text-anchor="middle" dominant-baseline="central" style="fill:rgb(181, 212, 244);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Phase 1 — Roboflow dataset fine-tune</text>
-    <text x="340" y="452" text-anchor="middle" dominant-baseline="central" style="fill:rgb(133, 183, 235);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">50 epochs · GTX 1650 · mAP@0.5 = 0.838 → 0.865</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="472" x2="340" y2="496" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 5: Client Dataset ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="498" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(113, 43, 19);stroke:rgb(240, 153, 123);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="523" text-anchor="middle" dominant-baseline="central" style="fill:rgb(245, 196, 179);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Client dataset labelling</text>
-    <text x="340" y="542" text-anchor="middle" dominant-baseline="central" style="fill:rgb(240, 153, 123);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">7 classes: Hardhat · Mask · NO-Hardhat · NO-Mask · NO-Safety Vest · Person · Safety Vest</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="562" x2="340" y2="586" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 6: Phase 2 Training ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="588" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(12, 68, 124);stroke:rgb(133, 183, 235);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="613" text-anchor="middle" dominant-baseline="central" style="fill:rgb(181, 212, 244);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Phase 2 — client data fine-tune</text>
-    <text x="340" y="632" text-anchor="middle" dominant-baseline="central" style="fill:rgb(133, 183, 235);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">50 epochs · weights from Phase 1 · mAP@0.5 = 0.594 → 0.865</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="652" x2="340" y2="676" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 7: Evaluation ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="678" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(60, 52, 137);stroke:rgb(175, 169, 236);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="703" text-anchor="middle" dominant-baseline="central" style="fill:rgb(206, 203, 246);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Evaluation</text>
-    <text x="340" y="722" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">Precision · Recall · mAP@0.5 · mAP@0.5-0.95 · confusion matrix</text>
-  </g>
-
-  <!-- arrow -->
-  <line x1="340" y1="742" x2="340" y2="766" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);color:rgb(255, 255, 255);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-
-  <!-- ── STAGE 8: Export / Deploy ── -->
-  <g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
-    <rect x="40" y="768" width="600" height="64" rx="10" stroke-width="0.5" style="fill:rgb(68, 68, 65);stroke:rgb(180, 178, 169);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-    <text x="340" y="793" text-anchor="middle" dominant-baseline="central" style="fill:rgb(211, 209, 199);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Export &amp; deploy</text>
-    <text x="340" y="812" text-anchor="middle" dominant-baseline="central" style="fill:rgb(180, 178, 169);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:middle;dominant-baseline:central">best.pt · ONNX / TensorRT · inference API</text>
-  </g>
-
-  <!-- Legend -->
-  <rect x="40" y="856" width="12" height="12" rx="2" stroke-width="0.5" style="fill:rgb(8, 80, 65);stroke:rgb(93, 202, 165);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="58" y="863" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:central">Data</text>
-  <rect x="110" y="856" width="12" height="12" rx="2" stroke-width="0.5" style="fill:rgb(12, 68, 124);stroke:rgb(133, 183, 235);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="128" y="863" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:central">Training</text>
-  <rect x="198" y="856" width="12" height="12" rx="2" stroke-width="0.5" style="fill:rgb(60, 52, 137);stroke:rgb(175, 169, 236);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="216" y="863" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:central">Selection / eval</text>
-  <rect x="320" y="856" width="12" height="12" rx="2" stroke-width="0.5" style="fill:rgb(113, 43, 19);stroke:rgb(240, 153, 123);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="338" y="863" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:central">Client data</text>
-  <rect x="412" y="856" width="12" height="12" rx="2" stroke-width="0.5" style="fill:rgb(68, 68, 65);stroke:rgb(180, 178, 169);color:rgb(255, 255, 255);stroke-width:0.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-  <text x="430" y="863" dominant-baseline="central" style="fill:rgb(194, 192, 182);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:central">Deployment</text>
-</svg>
+![Training Pipeline](yolo_training_pipeline_diagram.svg)
 
 ---
 
@@ -291,7 +168,7 @@ The gap between mAP@0.5 and mAP@0.5-0.95 narrows from ~0.37 → ~0.31 over train
 
 ### Phase 2 — Client Data Fine-Tuning
 
-Phase 2 loads the Phase 1 best checkpoint and fine-tunes on client-specific imagery, adapting to the target deployment environment.
+Phase 2 loads the **Phase 1 best checkpoint** (`runs/phase1/weights/best.pt`) and fine-tunes on client-specific imagery, adapting the model to the target deployment environment. Because we start from the Phase 1 best weights rather than random initialisation, the model already understands PPE classes — Phase 2 only needs to close the domain gap.
 
 **Phase 1 vs Phase 2 comparison:**
 
@@ -299,14 +176,18 @@ Phase 2 loads the Phase 1 best checkpoint and fine-tunes on client-specific imag
 
 | Metric | Phase 1 (Roboflow) | Phase 2 (Client) | Δ |
 |---|---|---|---|
-| mAP@0.5 (epoch 50) | ~0.838 | ~0.857 | +0.019 |
-| mAP@0.5-0.95 (epoch 50) | ~0.527 | ~0.549 | +0.022 |
-| Precision (epoch 50) | ~0.91 | ~0.93 | +0.02 |
-| Recall (epoch 50) | ~0.76 | ~0.79 | +0.03 |
+| mAP@0.5 (epoch 50) | ~0.838 | **~0.857** | **+0.019** |
+| mAP@0.5-0.95 (epoch 50) | ~0.527 | **~0.549** | **+0.022** |
+| Precision (epoch 50) | ~0.91 | **~0.93** | **+0.02** |
+| Recall (epoch 50) | ~0.76 | **~0.79** | **+0.03** |
+
+> Phase 2 consistently improves every metric over Phase 1, confirming that fine-tuning on client-specific imagery provides meaningful domain adaptation gains without sacrificing the generalisability learned in Phase 1.
 
 ---
 
 ## Results
+
+All evaluation metrics below are from the **Phase 2 final checkpoint** (`runs/phase2/weights/best.pt`) — the best model produced by the two-phase curriculum.
 
 ### Final Evaluation
 
@@ -457,7 +338,7 @@ python train_phase1.py \
   --batch 16
 ```
 
-### Train Phase 2 (Fine-Tune)
+### Train Phase 2 (Fine-Tune from Phase 1 Checkpoint)
 
 ```bash
 python train_phase2.py \
@@ -580,5 +461,5 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE) for de
 ---
 
 <div align="center">
-<sub>YOLOv8n · Two-Phase Training · GTX 1650 · mAP@0.5 0.837</sub>
+<sub>YOLOv8n · Two-Phase Training · GTX 1650 · Phase 2 mAP@0.5 0.857</sub>
 </div>
