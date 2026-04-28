@@ -1,0 +1,13 @@
+train: c:/Users/LEGION/Desktop/Train_Dataset/train/images
+val: c:/Users/LEGION/Desktop/Train_Dataset/valid/images
+test: c:/Users/LEGION/Desktop/Train_Dataset/test/images
+
+nc: 7
+names:
+- Hardhat
+- Mask
+- NO-Hardhat
+- NO-Mask
+- NO-Safety Vest
+- Person
+- Safety Vest
